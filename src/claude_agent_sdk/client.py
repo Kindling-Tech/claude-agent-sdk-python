@@ -64,7 +64,8 @@ class ClaudeSDKClient:
         self._custom_transport = transport
         self._transport: Transport | None = None
         self._query: Any | None = None
-        os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py-client"
+        # Note: CLAUDE_CODE_ENTRYPOINT is now passed to SubprocessCLITransport
+        # instead of mutating global os.environ for process isolation
 
     def _convert_hooks_to_internal_format(
         self, hooks: dict[HookEvent, list[HookMatcher]]
@@ -130,6 +131,7 @@ class ClaudeSDKClient:
             self._transport = SubprocessCLITransport(
                 prompt=actual_prompt,
                 options=options,
+                entrypoint="sdk-py-client",  # Pass as parameter for process isolation
             )
         await self._transport.connect()
 

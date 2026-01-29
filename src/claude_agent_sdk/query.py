@@ -1,6 +1,5 @@
 """Query function for one-shot interactions with Claude Code."""
 
-import os
 from collections.abc import AsyncIterable, AsyncIterator
 from typing import Any
 
@@ -116,9 +115,10 @@ async def query(
     if options is None:
         options = ClaudeAgentOptions()
 
-    os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py"
+    # Note: CLAUDE_CODE_ENTRYPOINT is now passed to SubprocessCLITransport
+    # via InternalClient instead of mutating global os.environ for process isolation
 
-    client = InternalClient()
+    client = InternalClient(entrypoint="sdk-py")
 
     async for message in client.process_query(
         prompt=prompt, options=options, transport=transport
