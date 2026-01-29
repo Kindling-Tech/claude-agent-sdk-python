@@ -37,12 +37,14 @@ class SubprocessCLITransport(Transport):
         self,
         prompt: str | AsyncIterable[dict[str, Any]],
         options: ClaudeAgentOptions,
+        entrypoint: str = "sdk-py",
     ):
         self._prompt = prompt
         # Always use streaming mode internally (matching TypeScript SDK)
         # This allows agents and other large configs to be sent via initialize request
         self._is_streaming = True
         self._options = options
+        self._entrypoint = entrypoint
         self._cli_path = (
             str(options.cli_path) if options.cli_path is not None else self._find_cli()
         )
@@ -329,13 +331,38 @@ class SubprocessCLITransport(Transport):
 
         cmd = self._build_command()
         try:
-            # Merge environment variables: system -> user -> SDK required
-            process_env = {
-                **os.environ,
-                **self._options.env,  # User-provided env vars
-                "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
-                "CLAUDE_AGENT_SDK_VERSION": __version__,
-            }
+            # Build process environment with optional isolation
+            if self._options.isolated:
+                # Isolated mode: Start with minimal env (only system essentials)
+                # This prevents API credentials from parent process leaking
+                process_env = {
+                    k: v for k, v in os.environ.items()
+                    if k in (
+                        "PATH", "HOME", "USER", "SHELL", "LANG", "LC_ALL",
+                        "TERM", "TMPDIR", "TMP", "TEMP", "XDG_RUNTIME_DIR",
+                        "NODE_PATH", "NPM_CONFIG_PREFIX",  # Needed for Claude CLI
+                        "CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK",  # Allow skip check
+                    )
+                }
+            else:
+                # Standard mode: Inherit full parent environment
+                process_env = dict(os.environ)
+
+            # Layer 1: Apply user-provided env vars
+            process_env.update(self._options.env)
+
+            # Layer 2: Apply explicit API configuration (HIGHEST PRIORITY)
+            # These always override inherited and user-provided env vars
+            if self._options.api_key is not None:
+                process_env["ANTHROPIC_API_KEY"] = self._options.api_key
+            if self._options.base_url is not None:
+                process_env["ANTHROPIC_BASE_URL"] = self._options.base_url
+            if self._options.max_output_tokens is not None:
+                process_env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(self._options.max_output_tokens)
+
+            # Layer 3: SDK-required vars (not API-sensitive, safe to set)
+            process_env["CLAUDE_CODE_ENTRYPOINT"] = self._entrypoint
+            process_env["CLAUDE_AGENT_SDK_VERSION"] = __version__
 
             # Enable file checkpointing if requested
             if self._options.enable_file_checkpointing:

@@ -720,6 +720,20 @@ class ClaudeAgentOptions:
     settings: str | None = None
     add_dirs: list[str | Path] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
+
+    # API Configuration (explicit, isolated per-instance)
+    # These override any inherited or user-provided environment variables
+    api_key: str | None = None  # Anthropic API key (overrides ANTHROPIC_API_KEY env var)
+    base_url: str | None = None  # API base URL (overrides ANTHROPIC_BASE_URL env var)
+
+    # Isolation mode - when True, don't inherit parent env vars for API config
+    # This prevents accidental credential leakage between instances
+    isolated: bool = False
+
+    # Max output tokens configuration (overrides CLAUDE_CODE_MAX_OUTPUT_TOKENS env var)
+    # This controls the maximum number of tokens in Claude's response
+    max_output_tokens: int | None = None
+
     extra_args: dict[str, str | None] = field(
         default_factory=dict
     )  # Pass arbitrary CLI flags
