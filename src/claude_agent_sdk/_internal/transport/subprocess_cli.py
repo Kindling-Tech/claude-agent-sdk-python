@@ -349,11 +349,23 @@ class SubprocessCLITransport(Transport):
                 # Isolated mode: Start with minimal env (only system essentials)
                 # This prevents API credentials from parent process leaking
                 process_env = {
-                    k: v for k, v in os.environ.items()
-                    if k in (
-                        "PATH", "HOME", "USER", "SHELL", "LANG", "LC_ALL",
-                        "TERM", "TMPDIR", "TMP", "TEMP", "XDG_RUNTIME_DIR",
-                        "NODE_PATH", "NPM_CONFIG_PREFIX",  # Needed for Claude CLI
+                    k: v
+                    for k, v in os.environ.items()
+                    if k
+                    in (
+                        "PATH",
+                        "HOME",
+                        "USER",
+                        "SHELL",
+                        "LANG",
+                        "LC_ALL",
+                        "TERM",
+                        "TMPDIR",
+                        "TMP",
+                        "TEMP",
+                        "XDG_RUNTIME_DIR",
+                        "NODE_PATH",
+                        "NPM_CONFIG_PREFIX",  # Needed for Claude CLI
                         "CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK",  # Allow skip check
                     )
                 }
@@ -371,7 +383,9 @@ class SubprocessCLITransport(Transport):
             if self._options.base_url is not None:
                 process_env["ANTHROPIC_BASE_URL"] = self._options.base_url
             if self._options.max_output_tokens is not None:
-                process_env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(self._options.max_output_tokens)
+                process_env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(
+                    self._options.max_output_tokens
+                )
 
             # Layer 3: SDK-required vars (not API-sensitive, safe to set)
             process_env["CLAUDE_CODE_ENTRYPOINT"] = self._entrypoint

@@ -739,7 +739,9 @@ class ClaudeAgentOptions:
 
     # API Configuration (explicit, isolated per-instance)
     # These override any inherited or user-provided environment variables
-    api_key: str | None = None  # Anthropic API key (overrides ANTHROPIC_API_KEY env var)
+    api_key: str | None = (
+        None  # Anthropic API key (overrides ANTHROPIC_API_KEY env var)
+    )
     base_url: str | None = None  # API base URL (overrides ANTHROPIC_BASE_URL env var)
 
     # Isolation mode - when True, don't inherit parent env vars for API config

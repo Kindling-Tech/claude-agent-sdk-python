@@ -9,8 +9,6 @@ These tests verify that:
 
 import os
 
-import pytest
-
 from claude_agent_sdk import ClaudeAgentOptions
 
 
@@ -63,15 +61,13 @@ class TestEnvironmentIsolation:
         """Creating ClaudeAgentOptions should not mutate os.environ."""
         original_keys = set(os.environ.keys())
 
-        options = ClaudeAgentOptions(
+        _options = ClaudeAgentOptions(
             api_key="test-key", base_url="https://test.com", isolated=True
         )
 
         # Verify no new keys were added to global environ
         new_keys = set(os.environ.keys())
-        assert (
-            original_keys == new_keys
-        ), f"New keys added: {new_keys - original_keys}"
+        assert original_keys == new_keys, f"New keys added: {new_keys - original_keys}"
 
         # Ensure values didn't leak
         assert os.environ.get("ANTHROPIC_API_KEY") != "test-key"
@@ -98,7 +94,7 @@ class TestEnvironmentIsolation:
         original_entrypoint = os.environ.get("CLAUDE_CODE_ENTRYPOINT")
 
         # Create options - should not mutate global env
-        options = ClaudeAgentOptions()
+        _options = ClaudeAgentOptions()
 
         # Verify CLAUDE_CODE_ENTRYPOINT was not modified
         current_entrypoint = os.environ.get("CLAUDE_CODE_ENTRYPOINT")
