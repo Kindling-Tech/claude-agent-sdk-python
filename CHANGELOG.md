@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.1.37
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.44
+
+## 0.1.36
+
+### New Features
+
+- **Thinking configuration**: Added `ThinkingConfig` types (`ThinkingConfigAdaptive`, `ThinkingConfigEnabled`, `ThinkingConfigDisabled`) and `thinking` field to `ClaudeAgentOptions` for fine-grained control over extended thinking behavior. The new `thinking` field takes precedence over the now-deprecated `max_thinking_tokens` field (#565)
+- **Effort option**: Added `effort` field to `ClaudeAgentOptions` supporting `"low"`, `"medium"`, `"high"`, and `"max"` values for controlling thinking depth (#565)
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.42
+
+## 0.1.35
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.39
+
+## 0.1.34
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.38
+- Updated CI workflows to use Claude Opus 4.6 model (#556)
+
+## 0.1.33
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.37
+
+## 0.1.32
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.36
+
 ## 0.1.31
 
 ### New Features
