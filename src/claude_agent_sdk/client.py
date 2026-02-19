@@ -1,13 +1,13 @@
 """Claude SDK Client for interacting with Claude Code."""
 
 import json
-import os
 from collections.abc import AsyncIterable, AsyncIterator
 from dataclasses import asdict, replace
 from typing import Any
 
 from . import Transport
 from ._errors import CLIConnectionError
+from ._internal.env import resolve_env
 from .types import ClaudeAgentOptions, HookEvent, HookMatcher, Message, ResultMessage
 
 
@@ -144,10 +144,12 @@ class ClaudeSDKClient:
 
         # Calculate initialize timeout from CLAUDE_CODE_STREAM_CLOSE_TIMEOUT env var if set
         # CLAUDE_CODE_STREAM_CLOSE_TIMEOUT is in milliseconds, convert to seconds
-        initialize_timeout_ms = int(
-            os.environ.get("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "60000")
+        stream_close_timeout_ms_str = resolve_env(
+            "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", options.env, "60000"
         )
-        initialize_timeout = max(initialize_timeout_ms / 1000.0, 60.0)
+        stream_close_timeout_ms = int(stream_close_timeout_ms_str)
+        initialize_timeout = max(stream_close_timeout_ms / 1000.0, 60.0)
+        stream_close_timeout = stream_close_timeout_ms / 1000.0
 
         # Convert agents to dict format for initialize request
         agents_dict: dict[str, dict[str, Any]] | None = None
@@ -168,6 +170,7 @@ class ClaudeSDKClient:
             sdk_mcp_servers=sdk_mcp_servers,
             initialize_timeout=initialize_timeout,
             agents=agents_dict,
+            stream_close_timeout=stream_close_timeout,
         )
 
         # Start reading messages and initialize

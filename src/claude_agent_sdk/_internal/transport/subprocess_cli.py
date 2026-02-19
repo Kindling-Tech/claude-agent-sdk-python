@@ -22,6 +22,7 @@ from ..._errors import CLIConnectionError, CLINotFoundError, ProcessError
 from ..._errors import CLIJSONDecodeError as SDKJSONDecodeError
 from ..._version import __version__
 from ...types import ClaudeAgentOptions
+from ..env import resolve_env
 from . import Transport
 
 logger = logging.getLogger(__name__)
@@ -339,7 +340,7 @@ class SubprocessCLITransport(Transport):
         if self._process:
             return
 
-        if not os.environ.get("CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK"):
+        if not resolve_env("CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", self._options.env, ""):
             await self._check_claude_version()
 
         cmd = self._build_command()

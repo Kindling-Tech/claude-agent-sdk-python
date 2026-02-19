@@ -10,6 +10,7 @@ from ..types import (
     HookMatcher,
     Message,
 )
+from .env import resolve_env
 from .message_parser import parse_message
 from .query import Query
 from .transport import Transport
@@ -104,6 +105,12 @@ class InternalClient:
                 for name, agent_def in configured_options.agents.items()
             }
 
+        # Resolve stream_close_timeout from options.env
+        stream_close_timeout_ms_str = resolve_env(
+            "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", configured_options.env, "60000"
+        )
+        stream_close_timeout = float(stream_close_timeout_ms_str) / 1000.0
+
         # Create Query to handle control protocol
         # Always use streaming mode internally (matching TypeScript SDK)
         # This ensures agents are always sent via initialize request
@@ -116,6 +123,7 @@ class InternalClient:
             else None,
             sdk_mcp_servers=sdk_mcp_servers,
             agents=agents_dict,
+            stream_close_timeout=stream_close_timeout,
         )
 
         try:

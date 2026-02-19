@@ -74,6 +74,7 @@ class Query:
         sdk_mcp_servers: dict[str, "McpServer"] | None = None,
         initialize_timeout: float = 60.0,
         agents: dict[str, dict[str, Any]] | None = None,
+        stream_close_timeout: float | None = None,
     ):
         """Initialize Query with transport and callbacks.
 
@@ -85,6 +86,8 @@ class Query:
             sdk_mcp_servers: Optional SDK MCP server instances
             initialize_timeout: Timeout in seconds for the initialize request
             agents: Optional agent definitions to send via initialize
+            stream_close_timeout: Timeout in seconds for stream close. If None,
+                falls back to CLAUDE_CODE_STREAM_CLOSE_TIMEOUT env var or 60s default.
         """
         self._initialize_timeout = initialize_timeout
         self.transport = transport
@@ -112,9 +115,14 @@ class Query:
 
         # Track first result for proper stream closure with SDK MCP servers
         self._first_result_event = anyio.Event()
-        self._stream_close_timeout = (
-            float(os.environ.get("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "60000")) / 1000.0
-        )  # Convert ms to seconds
+        if stream_close_timeout is not None:
+            self._stream_close_timeout = stream_close_timeout
+        else:
+            # Backward compat: fall back to os.environ when no value passed
+            self._stream_close_timeout = (
+                float(os.environ.get("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "60000"))
+                / 1000.0
+            )  # Convert ms to seconds
 
     async def initialize(self) -> dict[str, Any] | None:
         """Initialize control protocol if in streaming mode.
