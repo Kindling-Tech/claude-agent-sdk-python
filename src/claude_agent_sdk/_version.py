@@ -1,3 +1,3 @@
 """Version information for claude-agent-sdk."""
 
-__version__ = "0.1.38.2"
+__version__ = "0.1.40.1"
