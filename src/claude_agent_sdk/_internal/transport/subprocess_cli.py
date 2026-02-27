@@ -340,7 +340,9 @@ class SubprocessCLITransport(Transport):
         if self._process:
             return
 
-        if not resolve_env("CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", self._options.env, ""):
+        if not resolve_env(
+            "CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", self._options.env, ""
+        ):
             await self._check_claude_version()
 
         cmd = self._build_command()

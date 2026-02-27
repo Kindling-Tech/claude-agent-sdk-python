@@ -3,8 +3,6 @@
 import os
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from claude_agent_sdk._internal.env import resolve_env
 
 
@@ -67,13 +65,9 @@ class TestStreamCloseTimeoutResolution:
         """ClaudeSDKClient resolves CLAUDE_CODE_STREAM_CLOSE_TIMEOUT from options.env."""
         from claude_agent_sdk.types import ClaudeAgentOptions
 
-        options = ClaudeAgentOptions(
-            env={"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "30000"}
-        )
+        options = ClaudeAgentOptions(env={"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "30000"})
         # resolve_env should pick up the options.env value
-        result = resolve_env(
-            "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", options.env, "60000"
-        )
+        result = resolve_env("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", options.env, "60000")
         assert result == "30000"
 
     def test_stream_close_timeout_os_environ_fallback(self) -> None:
@@ -111,12 +105,8 @@ class TestSkipVersionCheckResolution:
         """CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK resolved from options.env."""
         from claude_agent_sdk.types import ClaudeAgentOptions
 
-        options = ClaudeAgentOptions(
-            env={"CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK": "1"}
-        )
-        result = resolve_env(
-            "CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", options.env, ""
-        )
+        options = ClaudeAgentOptions(env={"CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK": "1"})
+        result = resolve_env("CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", options.env, "")
         assert result == "1"
 
     def test_skip_version_check_os_environ_fallback(self) -> None:
@@ -124,12 +114,8 @@ class TestSkipVersionCheckResolution:
         from claude_agent_sdk.types import ClaudeAgentOptions
 
         options = ClaudeAgentOptions()
-        with patch.dict(
-            os.environ, {"CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK": "true"}
-        ):
-            result = resolve_env(
-                "CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", options.env, ""
-            )
+        with patch.dict(os.environ, {"CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK": "true"}):
+            result = resolve_env("CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", options.env, "")
         assert result == "true"
 
     def test_skip_version_check_default_empty(self) -> None:
@@ -143,9 +129,7 @@ class TestSkipVersionCheckResolution:
             if k != "CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK"
         }
         with patch.dict(os.environ, env_patch, clear=True):
-            result = resolve_env(
-                "CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", options.env, ""
-            )
+            result = resolve_env("CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", options.env, "")
         assert result == ""
         # Empty string is falsy, so version check should run
         assert not result
