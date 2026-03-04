@@ -452,6 +452,54 @@ class TestSubprocessCLITransport:
 
         anyio.run(_test)
 
+    def test_os_env_overrides_applied_and_restored(self):
+        """Test process-level os_env overrides are applied during run and restored."""
+
+        async def _test():
+            test_key = f"SDK_OS_ENV_{uuid.uuid4().hex[:8].upper()}"
+            test_value = f"value-{uuid.uuid4().hex[:8]}"
+            assert test_key not in os.environ
+
+            options = make_options(os_env={test_key: test_value})
+
+            with patch(
+                "anyio.open_process", new_callable=AsyncMock
+            ) as mock_open_process:
+                # Mock version check process
+                mock_version_process = MagicMock()
+                mock_version_process.stdout = MagicMock()
+                mock_version_process.stdout.receive = AsyncMock(
+                    return_value=b"2.0.0 (Claude Code)"
+                )
+                mock_version_process.terminate = MagicMock()
+                mock_version_process.wait = AsyncMock()
+
+                # Mock main process
+                mock_process = MagicMock()
+                mock_process.stdout = MagicMock()
+                mock_stdin = MagicMock()
+                mock_stdin.aclose = AsyncMock()
+                mock_process.stdin = mock_stdin
+                mock_process.returncode = None
+                mock_process.terminate = MagicMock()
+                mock_process.wait = AsyncMock(return_value=0)
+
+                mock_open_process.side_effect = [mock_version_process, mock_process]
+
+                transport = SubprocessCLITransport(prompt="test", options=options)
+                await transport.connect()
+
+                assert os.environ.get(test_key) == test_value
+
+                second_call_kwargs = mock_open_process.call_args_list[1].kwargs
+                env_passed = second_call_kwargs["env"]
+                assert env_passed[test_key] == test_value
+
+                await transport.close()
+                assert test_key not in os.environ
+
+        anyio.run(_test)
+
     def test_connect_as_different_user(self):
         """Test connect as different user."""
 

@@ -63,6 +63,8 @@ class SubprocessCLITransport(Transport):
             else _DEFAULT_MAX_BUFFER_SIZE
         )
         self._write_lock: anyio.Lock = anyio.Lock()
+        self._applied_os_env_keys: set[str] = set()
+        self._os_env_previous_values: dict[str, str | None] = {}
 
     def _find_cli(self) -> str:
         """Find Claude Code CLI binary."""
@@ -340,6 +342,8 @@ class SubprocessCLITransport(Transport):
         if self._process:
             return
 
+        self._apply_os_env_overrides()
+
         if not resolve_env(
             "CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK", self._options.env, ""
         ):
@@ -378,19 +382,9 @@ class SubprocessCLITransport(Transport):
 
             # Layer 1: Apply user-provided env vars
             process_env.update(self._options.env)
+            process_env.update(self._options.os_env)
 
-            # Layer 2: Apply explicit API configuration (HIGHEST PRIORITY)
-            # These always override inherited and user-provided env vars
-            if self._options.api_key is not None:
-                process_env["ANTHROPIC_API_KEY"] = self._options.api_key
-            if self._options.base_url is not None:
-                process_env["ANTHROPIC_BASE_URL"] = self._options.base_url
-            if self._options.max_output_tokens is not None:
-                process_env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(
-                    self._options.max_output_tokens
-                )
-
-            # Layer 3: SDK-required vars (not API-sensitive, safe to set)
+            # Layer 2: SDK-required vars (not API-sensitive, safe to set)
             process_env["CLAUDE_CODE_ENTRYPOINT"] = self._entrypoint
             process_env["CLAUDE_AGENT_SDK_VERSION"] = __version__
 
@@ -438,6 +432,7 @@ class SubprocessCLITransport(Transport):
             self._ready = True
 
         except FileNotFoundError as e:
+            self._restore_os_env_overrides()
             # Check if the error comes from the working directory or the CLI
             if self._cwd and not Path(self._cwd).exists():
                 error = CLIConnectionError(
@@ -449,9 +444,37 @@ class SubprocessCLITransport(Transport):
             self._exit_error = error
             raise error from e
         except Exception as e:
+            self._restore_os_env_overrides()
             error = CLIConnectionError(f"Failed to start Claude Code: {e}")
             self._exit_error = error
             raise error from e
+
+    def _apply_os_env_overrides(self) -> None:
+        """Apply explicit process-level env overrides for runtime compatibility."""
+        if self._applied_os_env_keys:
+            return
+        if not self._options.os_env:
+            return
+
+        for key, value in self._options.os_env.items():
+            self._os_env_previous_values[key] = os.environ.get(key)
+            os.environ[key] = value
+            self._applied_os_env_keys.add(key)
+
+    def _restore_os_env_overrides(self) -> None:
+        """Restore `os.environ` values overridden by this transport instance."""
+        if not self._applied_os_env_keys:
+            return
+
+        for key in self._applied_os_env_keys:
+            previous_value = self._os_env_previous_values.get(key)
+            if previous_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous_value
+
+        self._applied_os_env_keys.clear()
+        self._os_env_previous_values.clear()
 
     async def _handle_stderr(self) -> None:
         """Handle stderr stream - read and invoke callbacks."""
@@ -485,6 +508,7 @@ class SubprocessCLITransport(Transport):
         """Close the transport and clean up resources."""
         if not self._process:
             self._ready = False
+            self._restore_os_env_overrides()
             return
 
         # Close stderr task group if active
@@ -518,6 +542,7 @@ class SubprocessCLITransport(Transport):
 
         self._process = None
         self._stdout_stream = None
+        self._restore_os_env_overrides()
         self._stdin_stream = None
         self._stderr_stream = None
         self._exit_error = None
