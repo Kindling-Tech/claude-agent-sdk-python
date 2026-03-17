@@ -136,7 +136,6 @@ class ClaudeSDKClient:
             self._transport = SubprocessCLITransport(
                 prompt=actual_prompt,
                 options=options,
-                entrypoint="sdk-py-client",  # Pass as parameter for process isolation
             )
         await self._transport.connect()
 
