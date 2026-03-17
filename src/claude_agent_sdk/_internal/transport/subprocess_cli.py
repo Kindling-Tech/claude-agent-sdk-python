@@ -38,14 +38,12 @@ class SubprocessCLITransport(Transport):
         self,
         prompt: str | AsyncIterable[dict[str, Any]],
         options: ClaudeAgentOptions,
-        entrypoint: str = "sdk-py",
     ):
         self._prompt = prompt
         # Always use streaming mode internally (matching TypeScript SDK)
         # This allows agents and other large configs to be sent via initialize request
         self._is_streaming = True
         self._options = options
-        self._entrypoint = entrypoint
         self._cli_path = (
             str(options.cli_path) if options.cli_path is not None else self._find_cli()
         )
@@ -380,12 +378,14 @@ class SubprocessCLITransport(Transport):
                 # Standard mode: Inherit full parent environment
                 process_env = dict(os.environ)
 
-            # Layer 1: Apply user-provided env vars
+            # CLAUDE_CODE_ENTRYPOINT defaults to sdk-py; options.env can override
+            process_env["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py"
+
+            # Apply user-provided env vars (can override CLAUDE_CODE_ENTRYPOINT)
             process_env.update(self._options.env)
             process_env.update(self._options.os_env)
 
-            # Layer 2: SDK-required vars (not API-sensitive, safe to set)
-            process_env["CLAUDE_CODE_ENTRYPOINT"] = self._entrypoint
+            # SDK-required vars (always set by SDK, not overridable)
             process_env["CLAUDE_AGENT_SDK_VERSION"] = __version__
 
             # Enable file checkpointing if requested

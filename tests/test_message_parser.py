@@ -6,6 +6,7 @@ from claude_agent_sdk._errors import MessageParseError
 from claude_agent_sdk._internal.message_parser import parse_message
 from claude_agent_sdk.types import (
     AssistantMessage,
+    RateLimitEvent,
     ResultMessage,
     SystemMessage,
     TaskNotificationMessage,
@@ -272,6 +273,49 @@ class TestMessageParser:
         assert message.content[0].signature == "sig-123"
         assert isinstance(message.content[1], TextBlock)
         assert message.content[1].text == "Here's my response"
+
+    def test_parse_assistant_message_with_usage(self):
+        """Per-turn usage is preserved on AssistantMessage.
+
+        The CLI emits the API's full usage dict (including cache token
+        breakdown) on every assistant message. Previously this was dropped
+        by the parser, forcing consumers to wait for the aggregate in
+        ResultMessage. See issue #673.
+        """
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [{"type": "text", "text": "hi"}],
+                "model": "claude-opus-4-5",
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "cache_read_input_tokens": 2000,
+                    "cache_creation_input_tokens": 500,
+                },
+            },
+        }
+        message = parse_message(data)
+        assert isinstance(message, AssistantMessage)
+        assert message.usage == {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 2000,
+            "cache_creation_input_tokens": 500,
+        }
+
+    def test_parse_assistant_message_without_usage(self):
+        """usage defaults to None when absent (e.g. synthetic messages)."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [{"type": "text", "text": "hi"}],
+                "model": "claude-opus-4-5",
+            },
+        }
+        message = parse_message(data)
+        assert isinstance(message, AssistantMessage)
+        assert message.usage is None
 
     def test_parse_valid_system_message(self):
         """Test parsing a valid system message."""
@@ -546,6 +590,28 @@ class TestMessageParser:
         message = parse_message(data)
         assert isinstance(message, ResultMessage)
         assert message.stop_reason is None
+
+    def test_parse_rate_limit_event(self):
+        """Test parsing a rate_limit_event into a typed RateLimitEvent."""
+        data = {
+            "type": "rate_limit_event",
+            "rate_limit_info": {
+                "status": "allowed_warning",
+                "resetsAt": 1700000000,
+                "rateLimitType": "five_hour",
+                "utilization": 0.91,
+            },
+            "uuid": "abc-123",
+            "session_id": "session_xyz",
+        }
+        message = parse_message(data)
+        assert isinstance(message, RateLimitEvent)
+        assert message.uuid == "abc-123"
+        assert message.session_id == "session_xyz"
+        assert message.rate_limit_info.status == "allowed_warning"
+        assert message.rate_limit_info.resets_at == 1700000000
+        assert message.rate_limit_info.rate_limit_type == "five_hour"
+        assert message.rate_limit_info.utilization == 0.91
 
     def test_parse_invalid_data_type(self):
         """Test that non-dict data raises MessageParseError."""

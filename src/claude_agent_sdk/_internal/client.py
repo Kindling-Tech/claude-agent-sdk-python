@@ -21,14 +21,8 @@ from .transport.subprocess_cli import SubprocessCLITransport
 class InternalClient:
     """Internal client implementation."""
 
-    def __init__(self, entrypoint: str = "sdk-py") -> None:
-        """Initialize the internal client.
-
-        Args:
-            entrypoint: The entrypoint identifier to pass to the CLI subprocess.
-                       This is set as CLAUDE_CODE_ENTRYPOINT env var in the subprocess.
-        """
-        self._entrypoint = entrypoint
+    def __init__(self) -> None:
+        """Initialize the internal client."""
 
     def _convert_hooks_to_internal_format(
         self, hooks: dict[HookEvent, list[HookMatcher]]
@@ -83,7 +77,6 @@ class InternalClient:
             chosen_transport = SubprocessCLITransport(
                 prompt=prompt,
                 options=configured_options,
-                entrypoint=self._entrypoint,  # Pass for process isolation
             )
 
         # Connect transport

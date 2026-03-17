@@ -71,8 +71,6 @@ class ClaudeSDKClient:
         self._custom_transport = transport
         self._transport: Transport | None = None
         self._query: Any | None = None
-        # Note: CLAUDE_CODE_ENTRYPOINT is now passed to SubprocessCLITransport
-        # instead of mutating global os.environ for process isolation
 
     def _convert_hooks_to_internal_format(
         self, hooks: dict[HookEvent, list[HookMatcher]]

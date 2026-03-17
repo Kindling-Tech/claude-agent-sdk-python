@@ -115,10 +115,7 @@ async def query(
     if options is None:
         options = ClaudeAgentOptions()
 
-    # Note: CLAUDE_CODE_ENTRYPOINT is now passed to SubprocessCLITransport
-    # via InternalClient instead of mutating global os.environ for process isolation
-
-    client = InternalClient(entrypoint="sdk-py")
+    client = InternalClient()
 
     async for message in client.process_query(
         prompt=prompt, options=options, transport=transport

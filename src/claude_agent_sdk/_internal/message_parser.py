@@ -8,6 +8,8 @@ from ..types import (
     AssistantMessage,
     ContentBlock,
     Message,
+    RateLimitEvent,
+    RateLimitInfo,
     ResultMessage,
     StreamEvent,
     SystemMessage,
@@ -130,6 +132,7 @@ def parse_message(data: dict[str, Any]) -> Message | None:
                     model=data["message"]["model"],
                     parent_tool_use_id=data.get("parent_tool_use_id"),
                     error=data.get("error"),
+                    usage=data["message"].get("usage"),
                 )
             except KeyError as e:
                 raise MessageParseError(
@@ -217,6 +220,28 @@ def parse_message(data: dict[str, Any]) -> Message | None:
             except KeyError as e:
                 raise MessageParseError(
                     f"Missing required field in stream_event message: {e}", data
+                ) from e
+
+        case "rate_limit_event":
+            try:
+                info = data["rate_limit_info"]
+                return RateLimitEvent(
+                    rate_limit_info=RateLimitInfo(
+                        status=info["status"],
+                        resets_at=info.get("resetsAt"),
+                        rate_limit_type=info.get("rateLimitType"),
+                        utilization=info.get("utilization"),
+                        overage_status=info.get("overageStatus"),
+                        overage_resets_at=info.get("overageResetsAt"),
+                        overage_disabled_reason=info.get("overageDisabledReason"),
+                        raw=info,
+                    ),
+                    uuid=data["uuid"],
+                    session_id=data["session_id"],
+                )
+            except KeyError as e:
+                raise MessageParseError(
+                    f"Missing required field in rate_limit_event message: {e}", data
                 ) from e
 
         case _:
