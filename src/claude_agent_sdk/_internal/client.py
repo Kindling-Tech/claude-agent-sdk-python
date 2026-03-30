@@ -99,11 +99,11 @@ class InternalClient:
                 for name, agent_def in configured_options.agents.items()
             }
 
-        # Resolve stream_close_timeout from options.env
-        stream_close_timeout_ms_str = resolve_env(
-            "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", configured_options.env, "60000"
+        # Match ClaudeSDKClient.connect() — without this, query() ignores the env var
+        initialize_timeout_ms = int(
+            resolve_env("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", configured_options.env, "60000")
         )
-        stream_close_timeout = float(stream_close_timeout_ms_str) / 1000.0
+        initialize_timeout = max(initialize_timeout_ms / 1000.0, 60.0)
 
         # Create Query to handle control protocol
         # Always use streaming mode internally (matching TypeScript SDK)
@@ -116,8 +116,8 @@ class InternalClient:
             if configured_options.hooks
             else None,
             sdk_mcp_servers=sdk_mcp_servers,
+            initialize_timeout=initialize_timeout,
             agents=agents_dict,
-            stream_close_timeout=stream_close_timeout,
         )
 
         try:
@@ -139,9 +139,9 @@ class InternalClient:
                 }
                 await chosen_transport.write(json.dumps(user_message) + "\n")
                 await query.wait_for_result_and_end_input()
-            elif isinstance(prompt, AsyncIterable) and query._tg:
+            elif isinstance(prompt, AsyncIterable):
                 # Stream input in background for async iterables
-                query._tg.start_soon(query.stream_input, prompt)
+                query.spawn_task(query.stream_input(prompt))
 
             # Yield parsed messages, skipping unknown message types
             async for data in query.receive_messages():

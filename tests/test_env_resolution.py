@@ -1,7 +1,7 @@
 """Tests for environment variable resolution with options.env precedence."""
 
 import os
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from claude_agent_sdk._internal.env import resolve_env
 
@@ -133,48 +133,3 @@ class TestSkipVersionCheckResolution:
         assert result == ""
         # Empty string is falsy, so version check should run
         assert not result
-
-
-class TestQueryStreamCloseTimeout:
-    """Tests that Query accepts and uses stream_close_timeout parameter."""
-
-    def test_query_uses_passed_stream_close_timeout(self) -> None:
-        """Query uses the stream_close_timeout parameter when provided."""
-        from claude_agent_sdk._internal.query import Query
-
-        mock_transport = AsyncMock()
-        query = Query(
-            transport=mock_transport,
-            is_streaming_mode=True,
-            stream_close_timeout=30.0,
-        )
-        assert query._stream_close_timeout == 30.0
-
-    def test_query_falls_back_to_environ(self) -> None:
-        """Query falls back to os.environ when stream_close_timeout is None."""
-        from claude_agent_sdk._internal.query import Query
-
-        mock_transport = AsyncMock()
-        with patch.dict(os.environ, {"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "90000"}):
-            query = Query(
-                transport=mock_transport,
-                is_streaming_mode=True,
-            )
-        assert query._stream_close_timeout == 90.0
-
-    def test_query_falls_back_to_default(self) -> None:
-        """Query uses 60s default when no stream_close_timeout and no env var."""
-        from claude_agent_sdk._internal.query import Query
-
-        mock_transport = AsyncMock()
-        env_patch = {
-            k: v
-            for k, v in os.environ.items()
-            if k != "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"
-        }
-        with patch.dict(os.environ, env_patch, clear=True):
-            query = Query(
-                transport=mock_transport,
-                is_streaming_mode=True,
-            )
-        assert query._stream_close_timeout == 60.0

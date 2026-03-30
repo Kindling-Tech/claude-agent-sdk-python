@@ -10,10 +10,12 @@ from ._errors import CLIConnectionError
 from ._internal.env import resolve_env
 from .types import (
     ClaudeAgentOptions,
+    ContextUsageResponse,
     HookEvent,
     HookMatcher,
     McpStatusResponse,
     Message,
+    PermissionMode,
     ResultMessage,
 )
 
@@ -106,7 +108,9 @@ class ClaudeSDKClient:
             return
             yield {}  # type: ignore[unreachable]
 
-        actual_prompt = _empty_stream() if prompt is None else prompt
+        # String prompts are sent via transport.write() below, so the transport
+        # only needs an AsyncIterable (or an empty stream for None/str cases).
+        actual_prompt = prompt if isinstance(prompt, AsyncIterable) else _empty_stream()
 
         # Validate and configure permission settings (matching TypeScript SDK logic)
         if self.options.can_use_tool:
@@ -148,12 +152,10 @@ class ClaudeSDKClient:
 
         # Calculate initialize timeout from CLAUDE_CODE_STREAM_CLOSE_TIMEOUT env var if set
         # CLAUDE_CODE_STREAM_CLOSE_TIMEOUT is in milliseconds, convert to seconds
-        stream_close_timeout_ms_str = resolve_env(
-            "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", options.env, "60000"
+        initialize_timeout_ms = int(
+            resolve_env("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", options.env, "60000")
         )
-        stream_close_timeout_ms = int(stream_close_timeout_ms_str)
-        initialize_timeout = max(stream_close_timeout_ms / 1000.0, 60.0)
-        stream_close_timeout = stream_close_timeout_ms / 1000.0
+        initialize_timeout = max(initialize_timeout_ms / 1000.0, 60.0)
 
         # Convert agents to dict format for initialize request
         agents_dict: dict[str, dict[str, Any]] | None = None
@@ -174,16 +176,23 @@ class ClaudeSDKClient:
             sdk_mcp_servers=sdk_mcp_servers,
             initialize_timeout=initialize_timeout,
             agents=agents_dict,
-            stream_close_timeout=stream_close_timeout,
         )
 
         # Start reading messages and initialize
         await self._query.start()
         await self._query.initialize()
 
-        # If we have an initial prompt stream, start streaming it
-        if prompt is not None and isinstance(prompt, AsyncIterable) and self._query._tg:
-            self._query._tg.start_soon(self._query.stream_input, prompt)
+        # If we have an initial prompt, send it
+        if isinstance(prompt, str):
+            message = {
+                "type": "user",
+                "message": {"role": "user", "content": prompt},
+                "parent_tool_use_id": None,
+                "session_id": "default",
+            }
+            await self._transport.write(json.dumps(message) + "\n")
+        elif prompt is not None and isinstance(prompt, AsyncIterable):
+            self._query.spawn_task(self._query.stream_input(prompt))
 
     async def receive_messages(self) -> AsyncIterator[Message]:
         """Receive all messages from Claude."""
@@ -233,14 +242,16 @@ class ClaudeSDKClient:
             raise CLIConnectionError("Not connected. Call connect() first.")
         await self._query.interrupt()
 
-    async def set_permission_mode(self, mode: str) -> None:
+    async def set_permission_mode(self, mode: PermissionMode) -> None:
         """Change permission mode during conversation (only works with streaming mode).
 
         Args:
             mode: The permission mode to set. Valid options:
                 - 'default': CLI prompts for dangerous tools
                 - 'acceptEdits': Auto-accept file edits
+                - 'plan': Plan-only mode (no tool execution)
                 - 'bypassPermissions': Allow all tools (use with caution)
+                - 'dontAsk': Allow all tools without prompting
 
         Example:
             ```python
@@ -415,6 +426,42 @@ class ClaudeSDKClient:
         if not self._query:
             raise CLIConnectionError("Not connected. Call connect() first.")
         result: McpStatusResponse = await self._query.get_mcp_status()
+        return result
+
+    async def get_context_usage(self) -> ContextUsageResponse:
+        """Get a breakdown of current context window usage by category.
+
+        Returns the same data shown by the `/context` command in the CLI,
+        including token counts per category, total usage, and detailed
+        breakdowns of MCP tools, memory files, and agents.
+
+        Returns:
+            ContextUsageResponse dictionary with keys including:
+            - 'categories': List of categories with name, tokens, color
+            - 'totalTokens': Total tokens in context
+            - 'maxTokens': Effective context limit
+            - 'percentage': Percent of context used (0-100)
+            - 'model': Model the usage is calculated for
+            - 'mcpTools': Per-tool token breakdown for MCP servers
+            - 'memoryFiles': Per-file token breakdown for CLAUDE.md files
+            - 'agents': Per-agent token breakdown
+
+        Example:
+            ```python
+            async with ClaudeSDKClient() as client:
+                await client.query("Read this file")
+                async for _ in client.receive_response():
+                    pass
+
+                usage = await client.get_context_usage()
+                print(f"Using {usage['percentage']:.1f}% of context")
+                for cat in usage['categories']:
+                    print(f"  {cat['name']}: {cat['tokens']} tokens")
+            ```
+        """
+        if not self._query:
+            raise CLIConnectionError("Not connected. Call connect() first.")
+        result: ContextUsageResponse = await self._query.get_context_usage()
         return result
 
     async def get_server_info(self) -> dict[str, Any] | None:
