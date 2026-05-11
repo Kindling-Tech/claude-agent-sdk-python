@@ -25,14 +25,32 @@ from ._errors import (
     CLINotFoundError,
     ProcessError,
 )
+from ._internal.session_import import import_session_to_store
 from ._internal.session_mutations import (
     ForkSessionResult,
     delete_session,
+    delete_session_via_store,
     fork_session,
+    fork_session_via_store,
     rename_session,
+    rename_session_via_store,
     tag_session,
+    tag_session_via_store,
 )
-from ._internal.sessions import get_session_info, get_session_messages, list_sessions
+from ._internal.session_store import InMemorySessionStore, project_key_for_directory
+from ._internal.session_summary import fold_session_summary
+from ._internal.sessions import (
+    get_session_info,
+    get_session_info_from_store,
+    get_session_messages,
+    get_session_messages_from_store,
+    get_subagent_messages,
+    get_subagent_messages_from_store,
+    list_sessions,
+    list_sessions_from_store,
+    list_subagents,
+    list_subagents_from_store,
+)
 from ._internal.transport import Transport
 from ._version import __version__
 from .client import ClaudeSDKClient
@@ -46,8 +64,10 @@ from .types import (
     ContentBlock,
     ContextUsageCategory,
     ContextUsageResponse,
+    DeferredToolUse,
     HookCallback,
     HookContext,
+    HookEventMessage,
     HookInput,
     HookJSONOutput,
     HookMatcher,
@@ -61,6 +81,7 @@ from .types import (
     McpToolAnnotations,
     McpToolInfo,
     Message,
+    MirrorErrorMessage,
     NotificationHookInput,
     NotificationHookSpecificOutput,
     PermissionMode,
@@ -86,7 +107,17 @@ from .types import (
     SdkBeta,
     SdkPluginConfig,
     SDKSessionInfo,
+    ServerToolName,
+    ServerToolResultBlock,
+    ServerToolUseBlock,
+    SessionKey,
+    SessionListSubkeysKey,
     SessionMessage,
+    SessionStore,
+    SessionStoreEntry,
+    SessionStoreFlushMode,
+    SessionStoreListEntry,
+    SessionSummaryEntry,
     SettingSource,
     StopHookInput,
     StreamEvent,
@@ -384,12 +415,27 @@ def create_sdk_mcp_server(
                 return _typeddict_to_json_schema(tool_def.input_schema)
             return {"type": "object", "properties": {}}
 
+        def _build_meta(tool_def: "SdkMcpTool[Any]") -> dict[str, Any] | None:
+            # The MCP SDK's Zod schema strips unknown annotation fields, so
+            # Anthropic-specific hints use _meta with namespaced keys instead.
+            # maxResultSizeChars controls the CLI's layer-2 tool-result spill
+            # threshold (toolResultStorage.ts maybePersistLargeToolResult).
+            if tool_def.annotations is None:
+                return None
+            max_size = getattr(tool_def.annotations, "maxResultSizeChars", None)
+            if max_size is None:
+                return None
+            return {"anthropic/maxResultSizeChars": max_size}
+
         cached_tool_list = [
-            Tool(
-                name=tool_def.name,
-                description=tool_def.description,
-                inputSchema=_build_schema(tool_def),
-                annotations=tool_def.annotations,
+            Tool.model_validate(
+                {
+                    "name": tool_def.name,
+                    "description": tool_def.description,
+                    "inputSchema": _build_schema(tool_def),
+                    "annotations": tool_def.annotations,
+                    "_meta": _build_meta(tool_def),
+                }
             )
             for tool_def in tools
         ]
@@ -500,6 +546,7 @@ __all__ = [
     "TaskNotificationStatus",
     "TaskUsage",
     "ResultMessage",
+    "DeferredToolUse",
     "RateLimitEvent",
     "RateLimitInfo",
     "RateLimitStatus",
@@ -516,6 +563,9 @@ __all__ = [
     "ThinkingConfigDisabled",
     "ToolUseBlock",
     "ToolResultBlock",
+    "ServerToolName",
+    "ServerToolUseBlock",
+    "ServerToolResultBlock",
     "ContentBlock",
     "ContextUsageCategory",
     "ContextUsageResponse",
@@ -530,6 +580,7 @@ __all__ = [
     "HookCallback",
     "HookContext",
     "HookInput",
+    "HookEventMessage",
     "BaseHookInput",
     "PreToolUseHookInput",
     "PostToolUseHookInput",
@@ -556,14 +607,40 @@ __all__ = [
     "list_sessions",
     "get_session_info",
     "get_session_messages",
+    "list_subagents",
+    "get_subagent_messages",
     "SDKSessionInfo",
     "SessionMessage",
+    # Session store
+    "SessionKey",
+    "SessionStore",
+    "SessionStoreEntry",
+    "SessionStoreFlushMode",
+    "SessionStoreListEntry",
+    "SessionSummaryEntry",
+    "SessionListSubkeysKey",
+    "InMemorySessionStore",
+    "fold_session_summary",
+    "MirrorErrorMessage",
+    "project_key_for_directory",
+    "import_session_to_store",
+    # Session listing (SessionStore-backed async variants)
+    "list_sessions_from_store",
+    "get_session_info_from_store",
+    "get_session_messages_from_store",
+    "list_subagents_from_store",
+    "get_subagent_messages_from_store",
     # Session mutations
     "rename_session",
     "tag_session",
     "delete_session",
     "fork_session",
     "ForkSessionResult",
+    # Session mutations (SessionStore-backed async variants)
+    "rename_session_via_store",
+    "tag_session_via_store",
+    "delete_session_via_store",
+    "fork_session_via_store",
     # Beta support
     "SdkBeta",
     # Sandbox support
