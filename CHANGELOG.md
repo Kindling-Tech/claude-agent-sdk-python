@@ -1,5 +1,128 @@
 # Changelog
 
+## 0.2.96
+
+### Bug Fixes
+
+- Pinned `mcp` dependency below 2.0.0 to prevent incompatible breaking changes (#1028)
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.172
+
+## 0.2.95
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.170
+
+## 0.2.94
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.169
+
+## 0.2.93
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.167
+
+## 0.2.92
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.166
+
+## 0.2.91
+
+### Internal/Other Changes
+
+- Switched test suite from `pytest-asyncio` to anyio's pytest plugin, running every async test under both asyncio and trio backends to catch backend-specific regressions in CI (#1021)
+- Updated bundled Claude CLI to version 2.1.165
+
+## 0.2.90
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.163
+
+## 0.2.89
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.162
+
+## 0.2.88
+
+### Bug Fixes
+
+- **Trio compatibility for session stores**: Ported `session_store` code paths (`TranscriptMirrorBatcher`, `session_resume`, `sessions`) from raw `asyncio` primitives to `anyio`, fixing a crash (`TypeError: trio.run received unrecognized yield message`) when passing `session_store=` to `query()` or `ClaudeSDKClient` under trio (#990)
+
+### Internal/Other Changes
+
+- Switched e2e CI jobs (`test-e2e`, `test-e2e-docker`, `test-examples`) from static API key to workload identity federation, using short-lived OIDC tokens with automatic refresh (#1018)
+- Updated bundled Claude CLI to version 2.1.161
+
+## 0.2.87
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.150
+- Switched CI workflows from static API key to Workload Identity Federation for Claude authentication, using short-lived tokens instead of long-lived secrets (#984)
+
+## 0.2.86
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.149
+
+## 0.2.85
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.148
+
+## 0.2.84
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.147
+
+## 0.2.83
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.146
+
+## 0.2.82
+
+### New Features
+
+- **`EffortLevel` type export**: Added a public `EffortLevel` type alias for Claude effort string levels (`"low"`, `"medium"`, `"high"`, `"max"`, `"xhigh"`) and exported it from the package root, making it available for downstream SDK wrappers and type annotations (#951)
+
+### Bug Fixes
+
+- **Stderr callback isolation**: Fixed an issue where a user-provided `stderr` callback that raises an exception would silently terminate the stderr reader loop, dropping all subsequent stderr lines for the rest of the session. Exceptions are now caught per-line so a failing callback does not prevent delivery of later lines (#932)
+- **CancelledError in eager-flush done callback**: Fixed noisy `Exception in callback` log messages on shutdown when pending eager-flush tasks were cancelled. The done callback now gracefully handles `CancelledError` instead of unconditionally calling `Task.exception()` (#931)
+- **Tighter `permission_suggestions` type**: Replaced `list[Any] | None` with `list[dict[str, Any]] | None` on `SDKControlPermissionRequest.permission_suggestions`, enabling proper type-checking on consumers of that field (#955)
+
+### Documentation
+
+- Clarified that `hooks` dispatch for a given event is concurrent (all matchers fire in parallel), not sequential, preventing incorrect assumptions about ordering-dependent hooks like rate limiters gating subsequent hooks (#956)
+
+### Internal/Other Changes
+
+- Bumped `mcp` dependency lower bound to `>=1.23.0` to address GHSA-9h52-p55h-vw2f (CVE-2025-66416), which disables DNS rebinding protection by default in older versions (#927)
+- Stabilized eager-flush transcript mirror tests with deterministic wait helpers instead of fixed `asyncio.sleep(0)` yields (#933)
+- Updated bundled Claude CLI to version 2.1.142
+
+## 0.1.81
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.139
+
 ## 0.1.80
 
 ### Internal/Other Changes

@@ -5,8 +5,9 @@ in the receive loop.
 
 from __future__ import annotations
 
-import asyncio
 import os
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
@@ -152,10 +153,27 @@ async def _noop_error(_key: SessionKey | None, _err: str) -> None:
     pass
 
 
-# Patch target for the retry backoff — the batcher does ``import asyncio`` so
-# patching this attribute swaps the global ``asyncio.sleep`` for the duration
+async def _wait_until(predicate: Callable[[], bool], *, timeout: float = 1.0) -> None:
+    """Yield to the event loop until ``predicate()`` returns truthy.
+
+    Replaces fixed ``await anyio.sleep(0)`` counts in eager-flush tests
+    where the path from ``enqueue`` to ``store.append`` requires multiple
+    event-loop turns under lock contention. See #928 for the original
+    flakiness analysis.
+    """
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        if time.monotonic() > deadline:
+            raise AssertionError(
+                f"_wait_until predicate did not become truthy within {timeout}s"
+            )
+        await anyio.sleep(0)
+
+
+# Patch target for the retry backoff — the batcher does ``import anyio`` so
+# patching this attribute swaps the global ``anyio.sleep`` for the duration
 # of the ``with`` block.
-_BATCHER_SLEEP = "claude_agent_sdk._internal.transcript_mirror_batcher.asyncio.sleep"
+_BATCHER_SLEEP = "claude_agent_sdk._internal.transcript_mirror_batcher.anyio.sleep"
 
 
 class _RecordingStore(InMemorySessionStore):
@@ -171,7 +189,7 @@ class _RecordingStore(InMemorySessionStore):
 
 
 class TestTranscriptMirrorBatcher:
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_enqueue_then_flush_calls_store_append(self) -> None:
         store = _RecordingStore()
         batcher = TranscriptMirrorBatcher(
@@ -189,7 +207,7 @@ class TestTranscriptMirrorBatcher:
         assert key == {"project_key": "proj", "session_id": "sess"}
         assert entries == [{"type": "user", "n": 1}, {"type": "assistant", "n": 2}]
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_empty_entries_batch_skips_append(self) -> None:
         store = _RecordingStore()
         batcher = TranscriptMirrorBatcher(
@@ -200,7 +218,7 @@ class TestTranscriptMirrorBatcher:
         # No append for empty batch — adapters must not see phantom keys.
         assert store.append_calls == []
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_coalesces_per_file_path_preserving_order(self) -> None:
         store = _RecordingStore()
         batcher = TranscriptMirrorBatcher(
@@ -217,7 +235,7 @@ class TestTranscriptMirrorBatcher:
         assert store.append_calls[1][0]["session_id"] == "b"
         assert [e["n"] for e in store.append_calls[1][1]] == [2]
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_eager_flush_on_entry_count_threshold(self) -> None:
         store = _RecordingStore()
         batcher = TranscriptMirrorBatcher(
@@ -227,13 +245,11 @@ class TestTranscriptMirrorBatcher:
             max_pending_entries=5,
         )
         batcher.enqueue(_main_path(), [{"type": "x"}] * 6)  # > 5
-        # Eager flush is fire-and-forget — yield to let it run.
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        assert len(store.append_calls) == 1
+        # Eager flush is fire-and-forget — yield until it has run.
+        await _wait_until(lambda: len(store.append_calls) == 1)
         assert len(store.append_calls[0][1]) == 6
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_eager_flush_on_byte_threshold(self) -> None:
         store = _RecordingStore()
         batcher = TranscriptMirrorBatcher(
@@ -243,16 +259,14 @@ class TestTranscriptMirrorBatcher:
             max_pending_bytes=100,
         )
         batcher.enqueue(_main_path(), [{"type": "x", "blob": "a" * 200}])
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        assert len(store.append_calls) == 1
+        await _wait_until(lambda: len(store.append_calls) == 1)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_default_thresholds(self) -> None:
         assert MAX_PENDING_ENTRIES == 500
         assert MAX_PENDING_BYTES == 1 << 20
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_append_exception_calls_on_error_and_does_not_raise(self) -> None:
         class FailingStore(InMemorySessionStore):
             async def append(self, key, entries):
@@ -274,7 +288,7 @@ class TestTranscriptMirrorBatcher:
         assert errors[0][0] == {"project_key": "proj", "session_id": "sess"}
         assert "boom" in errors[0][1]
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_append_timeout_calls_on_error(self) -> None:
         """Timeout → on_error fires once, append is NOT retried (1 attempt)."""
         calls: list[int] = []
@@ -282,7 +296,7 @@ class TestTranscriptMirrorBatcher:
         class HangingStore(InMemorySessionStore):
             async def append(self, key, entries):
                 calls.append(1)
-                await asyncio.Event().wait()  # never resolves
+                await anyio.Event().wait()  # never resolves
 
         errors: list[str] = []
 
@@ -303,10 +317,11 @@ class TestTranscriptMirrorBatcher:
         assert len(errors) == 1
         sleep_mock.assert_not_awaited()  # no backoff sleep
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_append_timeout_no_concurrent_retry(self) -> None:
-        """A slow append that outlives send_timeout is attempted exactly once;
-        no retry overlaps the still-in-flight first call."""
+        """A slow append that outlives send_timeout is attempted exactly once
+        — a retry would launch a concurrent duplicate because cancellation is
+        best-effort for adapters wrapping non-cancellable I/O."""
         in_flight = 0
         max_in_flight = 0
         calls = 0
@@ -318,10 +333,13 @@ class TestTranscriptMirrorBatcher:
                 in_flight += 1
                 max_in_flight = max(max_in_flight, in_flight)
                 try:
-                    # Outlives send_timeout=0.02 and shields against the
-                    # cancellation wait_for issues — models a non-cancellable
-                    # adapter (e.g. sync I/O in a thread).
-                    await asyncio.shield(asyncio.sleep(0.1))
+                    # Sync sleep in a worker thread, abandoned on cancel:
+                    # ``fail_after(send_timeout=0.02)`` fires while the call
+                    # is still in flight — exactly the adapter shape the
+                    # no-retry-on-timeout rule protects against.
+                    await anyio.to_thread.run_sync(
+                        time.sleep, 0.1, abandon_on_cancel=True
+                    )
                 finally:
                     in_flight -= 1
 
@@ -338,14 +356,12 @@ class TestTranscriptMirrorBatcher:
         )
         batcher.enqueue(_main_path(), [{"type": "x"}])
         await batcher.flush()
-        # Let any (incorrectly) shielded/retried task observe overlap.
-        await asyncio.sleep(0.15)
 
         assert calls == 1
         assert max_in_flight == 1
         assert len(errors) == 1
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_append_retries_then_succeeds_no_error_reported(self) -> None:
         """Transient outage: append raises twice then succeeds on the 3rd
         attempt — batch is delivered, no mirror error reported."""
@@ -380,7 +396,7 @@ class TestTranscriptMirrorBatcher:
         # Backoff schedule honoured between attempts.
         assert [c.args[0] for c in sleep_mock.await_args_list] == [0.2, 0.8]
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_append_retries_exhausted_reports_error_once(self) -> None:
         """append raises on all 3 attempts → exactly one mirror error."""
         attempts: list[int] = []
@@ -406,7 +422,7 @@ class TestTranscriptMirrorBatcher:
         assert len(errors) == 1
         assert "boom" in errors[0][1]
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_close_flushes_pending(self) -> None:
         store = _RecordingStore()
         batcher = TranscriptMirrorBatcher(
@@ -416,7 +432,7 @@ class TestTranscriptMirrorBatcher:
         await batcher.close()
         assert len(store.append_calls) == 1
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_drain_never_raises_on_unexpected_do_flush_error(self) -> None:
         """Defense in depth: even if ``_do_flush`` raises something its own
         try/except doesn't cover, ``_drain()`` must swallow it so the receive
@@ -430,7 +446,7 @@ class TestTranscriptMirrorBatcher:
             await batcher.flush()  # must not raise
         assert store.append_calls == []
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_unmapped_file_path_is_dropped_silently(self) -> None:
         store = _RecordingStore()
         errors: list[Any] = []
@@ -446,12 +462,12 @@ class TestTranscriptMirrorBatcher:
         assert store.append_calls == []
         assert errors == []
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_two_eager_flushes_do_not_interleave_or_duplicate(self) -> None:
         """Parity with TS: two eager flushes triggered back-to-back (the
         second while the first is mid-append) must serialize via the lock
         — entries land once each, in enqueue order."""
-        gate = asyncio.Event()
+        gate = anyio.Event()
         appended: list[int] = []
 
         class SlowStore(InMemorySessionStore):
@@ -467,21 +483,22 @@ class TestTranscriptMirrorBatcher:
         )
         batcher.enqueue(_main_path(), [{"type": "x", "n": 1}])
         first = batcher._flush_task
-        await asyncio.sleep(0)  # let first drain detach + block on gate
+        await anyio.sleep(0)  # let first drain detach + block on gate
         batcher.enqueue(_main_path(), [{"type": "x", "n": 2}])
         second = batcher._flush_task
         assert first is not None and second is not None and first is not second
 
         gate.set()
-        await asyncio.gather(first, second)
+        await first.wait()
+        await second.wait()
         assert appended == [1, 2]  # no dup, no interleave
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_flush_awaits_in_flight_eager_flush(self) -> None:
         """Explicit flush() must serialize after a background eager flush so
         append ordering holds across the two batches."""
         order: list[int] = []
-        gate = asyncio.Event()
+        gate = anyio.Event()
 
         class SlowStore(InMemorySessionStore):
             async def append(self, key, entries):
@@ -495,12 +512,12 @@ class TestTranscriptMirrorBatcher:
             max_pending_entries=1,
         )
         batcher.enqueue(_main_path(), [{"type": "x", "n": 1}, {"type": "x", "n": 2}])
-        await asyncio.sleep(0)  # let eager flush start (now blocked on gate)
+        await anyio.sleep(0)  # let eager flush start (now blocked on gate)
         batcher.enqueue(_main_path(), [{"type": "x", "n": 3}])
-        flush_task = asyncio.create_task(batcher.flush())
-        await asyncio.sleep(0)
-        gate.set()
-        await flush_task
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(batcher.flush)
+            await anyio.sleep(0)
+            gate.set()
         assert order == [1, 2, 3]
 
 
@@ -536,7 +553,7 @@ class TestBuildMirrorBatcherFlushMode:
         assert batcher.max_pending_entries == want_entries
         assert batcher.max_pending_bytes == want_bytes
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_eager_mode_flushes_per_frame(self) -> None:
         store = _RecordingStore()
         batcher = build_mirror_batcher(
@@ -546,14 +563,13 @@ class TestBuildMirrorBatcherFlushMode:
             on_error=_noop_error,
             flush_mode="eager",
         )
+        # Use _wait_until rather than a fixed ``sleep(0)`` count: the path
+        # from enqueue() to store.append() needs multiple event-loop turns
+        # under lock contention between consecutive drains. See #928.
         batcher.enqueue(_main_path(), [{"type": "user", "n": 1}])
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        assert len(store.append_calls) == 1
+        await _wait_until(lambda: len(store.append_calls) == 1)
         batcher.enqueue(_main_path(), [{"type": "assistant", "n": 2}])
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        assert len(store.append_calls) == 2
+        await _wait_until(lambda: len(store.append_calls) == 2)
         assert [e["n"] for c in store.append_calls for e in c[1]] == [1, 2]
 
     def test_options_default_is_batched(self) -> None:
@@ -591,13 +607,17 @@ class TestSessionMirrorFlag:
 
 
 def _make_mock_transport(
-    messages: list[dict[str, Any]], *, yield_between: bool = False
+    messages: list[dict[str, Any]], *, yields_between: int = 0
 ) -> Any:
+    """Mock transport. ``yields_between`` inserts that many ``sleep(0)``
+    cycles before each frame (except the first) — needed by eager-flush
+    tests so background drain tasks have enough event-loop turns to
+    complete before the next frame arrives. See #928."""
     mock_transport = AsyncMock()
 
     async def mock_receive():
         for msg in messages:
-            if yield_between:
+            for _ in range(yields_between):
                 await anyio.sleep(0)
             yield msg
 
@@ -788,14 +808,14 @@ class TestReceiveLoopFramePeeling:
                 "filePath": _main_path("p", "s"),
                 "entries": [{"type": "assistant", "uuid": "a1"}],
             }
-            # Yield to the event loop between frames so the eager background
-            # drain scheduled by enqueue() can run before the next frame
-            # arrives — models the await on real stdout I/O. Without this the
-            # mock delivers both frames synchronously and they coalesce, which
-            # is correct back-pressure behaviour but not what we're asserting.
+            # Yield to the event loop multiple times between frames so the
+            # eager background drain scheduled by enqueue() can complete
+            # before the next frame arrives — models the await on real
+            # stdout I/O. Two yields aren't enough under lock contention
+            # between consecutive drains (~4 needed). See #928.
             mock_transport = _make_mock_transport(
                 [frame1, frame2, _ASSISTANT_MSG, _RESULT_MSG],
-                yield_between=True,
+                yields_between=10,
             )
 
             with (
@@ -919,7 +939,7 @@ class TestReceiveLoopFramePeeling:
 
 
 class TestQueryReportMirrorError:
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_report_mirror_error_injects_system_message(self) -> None:
         transport = AsyncMock()
         transport.is_ready = Mock(return_value=True)

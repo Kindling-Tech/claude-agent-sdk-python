@@ -160,7 +160,9 @@ class InternalClient:
 
         # Match ClaudeSDKClient.connect() — without this, query() ignores the env var
         initialize_timeout_ms = int(
-            resolve_env("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", configured_options.env, "60000")
+            resolve_env(
+                "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", configured_options.env, "60000"
+            )
         )
         initialize_timeout = max(initialize_timeout_ms / 1000.0, 60.0)
 
