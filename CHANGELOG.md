@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.2.107
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.186
+
+## 0.2.106
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.185
+
+## 0.2.105
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.183
+
+## 0.2.104
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.181
+
+## 0.2.103
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.179
+
+## 0.2.102
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.178
+
+## 0.2.101
+
+### Bug Fixes
+
+- **Typed `task_updated` lifecycle events**: Exposed terminal `system/task_updated` events as typed `TaskUpdatedMessage` with `task_id`, `patch`, `status`, `session_id`, and `uuid` fields. Consumers tracking active background tasks no longer hang when a task finishes via a `task_updated` message without a corresponding `TaskNotificationMessage`. Added `TaskUpdatedStatus` type and `TERMINAL_TASK_STATUSES` frozenset for reliable active-task bookkeeping (#1016)
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.177
+
+## 0.2.100
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.176
+
+## 0.2.99
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.175
+
+## 0.2.98
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.174
+
+## 0.2.97
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.173
+
 ## 0.2.96
 
 ### Bug Fixes
