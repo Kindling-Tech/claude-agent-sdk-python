@@ -19,13 +19,15 @@ class TestChangelog:
         content = self.changelog_path.read_text()
         lines = content.split("\n")
 
-        version_pattern = re.compile(r"^## \d+\.\d+\.\d+(?:\s+\(\d{4}-\d{2}-\d{2}\))?$")
+        version_pattern = re.compile(
+            r"^## \d+\.\d+\.\d+(?:\.\d+)?(?:\s+\(\d{4}-\d{2}-\d{2}\))?$"
+        )
         versions = []
 
         for line in lines:
             if line.startswith("## "):
                 assert version_pattern.match(line), f"Invalid version format: {line}"
-                version_match = re.match(r"^## (\d+\.\d+\.\d+)", line)
+                version_match = re.match(r"^## (\d+\.\d+\.\d+(?:\.\d+)?)", line)
                 if version_match:
                     versions.append(version_match.group(1))
 
@@ -67,9 +69,15 @@ class TestChangelog:
         versions = []
         for line in lines:
             if line.startswith("## "):
-                version_match = re.match(r"^## (\d+)\.(\d+)\.(\d+)", line)
+                version_match = re.match(
+                    r"^## (\d+)\.(\d+)\.(\d+)(?:\.(\d+))?",
+                    line,
+                )
                 if version_match:
-                    versions.append(tuple(map(int, version_match.groups())))
+                    major, minor, patch, fork = version_match.groups()
+                    versions.append(
+                        (int(major), int(minor), int(patch), int(fork or 0))
+                    )
 
         for i in range(1, len(versions)):
             assert versions[i - 1] > versions[i], (

@@ -174,6 +174,32 @@ class TestEnvInheritanceAndPrecedence:
 
 
 # ---------------------------------------------------------------------------
+# 2b. Claude response output limit passthrough in isolated mode
+# ---------------------------------------------------------------------------
+
+
+class TestClaudeOutputTokenEnvPassthrough:
+    def test_application_output_limit_is_inherited_in_isolated_mode(self):
+        """The non-secret output limit survives the isolated env allowlist."""
+        with patch.dict(os.environ, {"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000"}):
+            transport = make_transport(env={}, isolated=True)
+            env = _capture_env(transport)
+
+        assert env.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS") == "64000"
+
+    def test_options_env_overrides_inherited_output_limit(self):
+        """Per-run configuration remains higher priority than the process value."""
+        with patch.dict(os.environ, {"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"}):
+            transport = make_transport(
+                env={"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000"},
+                isolated=True,
+            )
+            env = _capture_env(transport)
+
+        assert env.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS") == "64000"
+
+
+# ---------------------------------------------------------------------------
 # 3. Layer-2 threshold boundary (documents the unresolved gap)
 # ---------------------------------------------------------------------------
 
