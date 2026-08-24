@@ -465,25 +465,61 @@ class SubprocessCLITransport(Transport):
                 f"are unsafe to pass on a Windows command line: {bad!r}"
             )
 
+    def _warn_if_output_style_is_inert(self) -> None:
+        """Warn when ``output_style`` cannot reach the system prompt.
+
+        An output style replaces the Claude Code base system prompt, so it is
+        only applied when the base prompt is in play. That means a
+        ``SystemPromptPreset``. The default (``None``) sends an empty system
+        prompt, and a plain string or file overrides the base outright; in all
+        three cases the CLI reports the style in its init message but never
+        injects it.
+        """
+        if self._options.output_style is None:
+            return
+
+        sp = self._options.system_prompt
+        if isinstance(sp, dict) and sp.get("type") == "preset":
+            return
+
+        if sp is None:
+            shape = "the default empty system prompt"
+        elif isinstance(sp, str):
+            shape = "a string system_prompt"
+        else:
+            shape = f"a {sp.get('type')!r} system_prompt"
+
+        logger.warning(
+            "output_style=%r is set but will not be applied: %s replaces the "
+            "Claude Code base system prompt that output styles substitute "
+            "into. Use system_prompt={'type': 'preset', 'preset': "
+            "'claude_code'} (optionally with 'append') to make the style take "
+            "effect.",
+            self._options.output_style,
+            shape,
+        )
+
     def _build_settings_value(self) -> str | None:
-        """Build settings value, merging sandbox settings if provided.
+        """Build settings value, merging sandbox and output style if provided.
 
         Returns the settings value as either:
-        - A JSON string (if sandbox is provided or settings is JSON)
-        - A file path (if only settings path is provided without sandbox)
-        - None if neither settings nor sandbox is provided
+        - A JSON string (if sandbox/output_style is provided or settings is JSON)
+        - A file path (if only settings path is provided, without sandbox or
+          output_style)
+        - None if none of settings, sandbox, or output_style is provided
         """
         has_settings = self._options.settings is not None
         has_sandbox = self._options.sandbox is not None
+        has_output_style = self._options.output_style is not None
 
-        if not has_settings and not has_sandbox:
+        if not has_settings and not has_sandbox and not has_output_style:
             return None
 
-        # If only settings path and no sandbox, pass through as-is
-        if has_settings and not has_sandbox:
+        # If only a settings path/JSON and nothing to merge, pass through as-is
+        if has_settings and not has_sandbox and not has_output_style:
             return self._options.settings
 
-        # If we have sandbox settings, we need to merge into a JSON object
+        # Something needs merging, so build a JSON object
         settings_obj: dict[str, Any] = {}
 
         if has_settings:
@@ -516,6 +552,11 @@ class SubprocessCLITransport(Transport):
         # Merge sandbox settings
         if has_sandbox:
             settings_obj["sandbox"] = self._options.sandbox
+
+        # Merge output style. Flag settings win over user/project settings, so
+        # an explicit option always beats an outputStyle from a settings file.
+        if has_output_style:
+            settings_obj["outputStyle"] = self._options.output_style
 
         return json.dumps(settings_obj)
 
@@ -580,6 +621,8 @@ class SubprocessCLITransport(Transport):
                 cmd.extend(
                     ["--append-system-prompt", cast(SystemPromptPreset, sp)["append"]]
                 )
+
+        self._warn_if_output_style_is_inert()
 
         # Handle tools option (base set of tools)
         if self._options.tools is not None:

@@ -2075,6 +2075,25 @@ class ClaudeAgentOptions:
     CLI flag.
     """
 
+    output_style: str | None = None
+    """Output style the CLI should apply to the base system prompt.
+
+    Accepts a built-in style name (``"Concise"``, ``"Explanatory"``,
+    ``"Learning"``, ``"Proactive"``, ``"default"``) or the name of a custom
+    style installed under ``.claude/output-styles``. Merged into the
+    ``--settings`` payload as ``outputStyle``, so it takes the same "flag
+    settings" precedence as :attr:`settings` and overrides any ``outputStyle``
+    from user/project settings files.
+
+    An output style *replaces* the Claude Code base system prompt, so it only
+    takes effect when that base prompt is in play — that is, when
+    ``system_prompt`` is a :class:`SystemPromptPreset` (with or without
+    ``append``). The SDK default (``system_prompt=None``) sends an empty system
+    prompt, and a string or file ``system_prompt`` overrides the base outright;
+    in those cases the CLI still reports the style in its init message but
+    never injects it, and the SDK logs a warning.
+    """
+
     add_dirs: list[str | Path] = field(default_factory=list)
     """Additional directories Claude can access beyond the current working directory.
 

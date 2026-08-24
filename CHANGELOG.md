@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.143.2
+
+### Kindling Fork Changes
+
+- Added `ClaudeAgentOptions.output_style` for selecting a Claude Code output style (`"Concise"`, `"Explanatory"`, `"Learning"`, `"Proactive"`, `"default"`, or a custom style name). The value is merged into the `--settings` payload as `outputStyle`, so it lands in the highest-priority flag-settings layer and overrides any `outputStyle` from user or project settings files. It composes with an existing `settings` path or JSON string and with `sandbox`.
+- The SDK now logs a warning when `output_style` is set but cannot take effect. An output style replaces the Claude Code base system prompt, so it only applies when `system_prompt` is a preset; the default empty prompt, a string prompt, and a file prompt all suppress it.
+
 ## 0.2.143.1
 
 ### Kindling Fork Changes
