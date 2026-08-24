@@ -8,6 +8,8 @@ settings" layer, above any user/project settings file.
 import json
 import logging
 
+import pytest
+
 from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
 from claude_agent_sdk.types import ClaudeAgentOptions
 
@@ -73,6 +75,15 @@ class TestOutputStyleSettings:
 
 
 class TestOutputStyleWarning:
+    @pytest.fixture(autouse=True)
+    def _reset_warning_latch(self):
+        """The warning fires once per process; reset it between tests."""
+        import claude_agent_sdk._internal.transport.subprocess_cli as mod
+
+        mod._output_style_warning_emitted = False
+        yield
+        mod._output_style_warning_emitted = False
+
     def test_warns_for_string_system_prompt(self, caplog):
         with caplog.at_level(logging.WARNING):
             _transport(
@@ -109,3 +120,9 @@ class TestOutputStyleWarning:
         with caplog.at_level(logging.WARNING):
             _transport(system_prompt="You are a bot.")._build_command()
         assert "will not be applied" not in caplog.text
+
+    def test_warns_at_most_once_per_process(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            _transport(output_style="Concise", system_prompt="a")._build_command()
+            _transport(output_style="Concise", system_prompt="b")._build_command()
+        assert caplog.text.count("will not be applied") == 1

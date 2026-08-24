@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.143.3
+
+### Kindling Fork Changes
+
+- The inert-`output_style` warning now fires at most once per process. Callers that set the option on every request would otherwise get one warning per connect.
+
 ## 0.2.143.2
 
 ### Kindling Fork Changes

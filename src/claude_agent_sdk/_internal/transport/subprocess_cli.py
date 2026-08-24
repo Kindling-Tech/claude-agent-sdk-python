@@ -33,6 +33,10 @@ from . import Transport
 
 logger = logging.getLogger(__name__)
 
+# Set once the inert-output_style warning has been emitted (see
+# SubprocessCLITransport._warn_if_output_style_is_inert).
+_output_style_warning_emitted = False
+
 _DEFAULT_MAX_BUFFER_SIZE = 1024 * 1024  # 1MB buffer limit
 MINIMUM_CLAUDE_CODE_VERSION = "2.0.0"
 
@@ -473,7 +477,7 @@ class SubprocessCLITransport(Transport):
         ``SystemPromptPreset``. The default (``None``) sends an empty system
         prompt, and a plain string or file overrides the base outright; in all
         three cases the CLI reports the style in its init message but never
-        injects it.
+        injects it. Warns at most once per process.
         """
         if self._options.output_style is None:
             return
@@ -481,6 +485,13 @@ class SubprocessCLITransport(Transport):
         sp = self._options.system_prompt
         if isinstance(sp, dict) and sp.get("type") == "preset":
             return
+
+        # One line per process. Callers that set an inert output_style do it on
+        # every request, and a per-connect warning would drown their logs.
+        global _output_style_warning_emitted
+        if _output_style_warning_emitted:
+            return
+        _output_style_warning_emitted = True
 
         if sp is None:
             shape = "the default empty system prompt"
