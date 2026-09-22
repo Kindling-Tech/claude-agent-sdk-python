@@ -1,5 +1,94 @@
 # Changelog
 
+## 0.2.156.1
+
+### Kindling Fork Changes
+
+- Synced Anthropic upstream SDK `v0.2.156`, including bundled Claude Code `2.1.280`.
+- Preserved Kindling's `isolated` / `os_env` options, `options.env`-aware env resolution, `CLAUDE_CODE_MAX_OUTPUT_TOKENS` passthrough, and the `output_style` option.
+
+## 0.2.156
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.276
+
+## 0.2.155
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.275
+
+## 0.2.154
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.274
+
+## 0.2.153
+
+### New Features
+
+- **`snapshot` option for system prompts**: Added a `snapshot` field to `SystemPromptPreset` and a new `SystemPromptCustom` typed dict. When `snapshot` is True, the session keeps the system prompt recorded on its first request, improving prompt-caching behavior across resumed sessions. When False, the prompt is rebuilt on every request, useful for iterating on `append` text. Requires CLI 2.1.257+ (#1268)
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.273
+
+## 0.2.152
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.259
+
+## 0.2.151
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.258
+
+## 0.2.150
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.257
+
+## 0.2.149
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.252
+
+## 0.2.148
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.251
+
+## 0.2.147
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.250
+
+## 0.2.146
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.248
+
+## 0.2.145
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.247
+
+## 0.2.144
+
+### Internal/Other Changes
+
+- Updated bundled Claude CLI to version 2.1.246
+
 ## 0.2.143.3
 
 ### Kindling Fork Changes
