@@ -13,7 +13,7 @@ from ..types import (
 )
 from .env import resolve_env
 from .message_parser import parse_message
-from .query import Query, stamp_user_message
+from .query import Query, run_end_ceiling_ms, stamp_user_message
 from .session_resume import (
     MaterializedResume,
     apply_materialized_options,
@@ -154,6 +154,7 @@ class InternalClient:
             skills=configured_options.skills,
             forward_subagent_text=configured_options.forward_subagent_text,
             verbatim_prompts=configured_options.verbatim_prompts,
+            run_end_ceiling_ms=run_end_ceiling_ms(configured_options.env),
         )
 
         if configured_options.session_store is not None:
