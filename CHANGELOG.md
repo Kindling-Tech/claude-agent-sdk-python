@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.180.1
+
+### Kindling Fork Changes
+
+- Synced Anthropic upstream SDK `v0.2.180` (`v0.2.179` and `v0.2.180` only update the bundled Claude Code, to `2.1.319` and then `2.1.321`).
+- Preserved Kindling's `isolated` / `os_env` options, `options.env`-aware env resolution, `CLAUDE_CODE_MAX_OUTPUT_TOKENS` passthrough, and the `output_style` option.
+
 ## 0.2.178.1
 
 ### Kindling Fork Changes
